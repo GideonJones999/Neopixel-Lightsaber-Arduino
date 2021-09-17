@@ -6,6 +6,7 @@
 #include "DFRobotDFPlayerMini.h"
 #include "SoftwareSerial.h"
 #include <Adafruit_NeoPixel.h>
+#include "Arduino.h"
 
 
 int16_t ax, ay, az;
@@ -34,7 +35,6 @@ boolean idle = false, swinging = false, crashing = false;
 
 #define bladePin 6          // Where to connect the blades on the arduino
 #define buttonPin 2         // where to connect the button on the arduino
-// MP3PlayerPins 2, 4?
 #define voltagePin A6
 
 bool isBladeOn = true;
@@ -42,7 +42,7 @@ bool isBladeOn = true;
 // Create instance
 MPU6050 accelgyro;
 DFRobotDFPlayerMini mp3_play;
-SoftwareSerial mySoftwareSerial(2, 4); // RX, TX
+SoftwareSerial mySoftwareSerial(10, 11); // RX, TX
 //Adafruit_NeoPixel strip = Adafruit_NeoPixel(N_LEDS, PIN, NEO_GRB + NEO_KHZ800);
 
 const uint8_t PROGMEM gamma8[] = {
@@ -77,11 +77,11 @@ const uint8_t PROGMEM gamma8[] = {
 
 void setup() {
   // Start console
-  Serial.begin(9600);
+  Serial.begin(115200);
   gyroSetup();
   mp3Setup();
   //  neopixelSetup();
-  //  playSound("on");
+  playSound("ignite");
 }
 
 void gyroSetup() {
@@ -93,6 +93,7 @@ void gyroSetup() {
 
 void mp3Setup() {
   Serial.println(F("DFRobot DFPlayer Mini Demo"));
+  mySoftwareSerial.begin(9600);
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
 
   if (!mp3_play.begin(mySoftwareSerial)) {  //Use softwareSerial to communicate with mp3.
@@ -104,23 +105,6 @@ void mp3Setup() {
   Serial.println(F("DFPlayer Mini online."));
 
   mp3_play.volume(30);  //Set volume value. From 0 to 30
-}
-
-void loop() {
-//  if (isBladeOn) {
-    randomBladePulse();
-    getCompl();
-    checkButton();
-    checkStrike();
-    checkSwing();
-    checkBattery();
-    playSound("default");
-//  }
-//  checkButtonActivate();
-}
-
-void checkButtonActivate() {
-  //check if the button is pressed to turn blade on  
 }
 
 void playSound(String soundType) {
@@ -165,6 +149,23 @@ defualt:
       mp3_play.play(1);
       break;
   }
+}
+
+void loop() {
+//  if (isBladeOn) {
+//    randomBladePulse();
+    getCompl();
+//    checkButton();
+//    checkStrike();
+//    checkSwing();
+//    checkBattery();
+//    playSound("default");
+//  }
+//  checkButtonActivate();
+}
+
+void checkButtonActivate() {
+  //check if the button is pressed to turn blade on  
 }
 
 void checkSwing() {
