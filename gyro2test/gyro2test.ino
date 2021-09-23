@@ -109,63 +109,60 @@ void mp3Setup() {
 
 void playSound(String soundType) {
   switch (soundType[0]) {
-    case 'h': //high swing
-      Serial.println("high swing noise");
-            mp3_play.play(1);
-
+    case 'f': //fast swing
+      Serial.println("fast swing noise");
+      mp3_play.playFolder(4, random(8));
       break;
     case 'l': //low swing
-      Serial.println("low swing noise");
-            mp3_play.play(1);
-
+      Serial.println("slow swing noise");
+      mp3_play.playFolder(3, random(7));
       break;
     case 's': //strong hit
       Serial.println("strong hit noise");
-            mp3_play.play(1);
-//          play(4 through 12)
+      mp3_play.playFolder(1, random(8));
       break;
     case 'w': //weak hit
       Serial.println("weak hit noise");
-            mp3_play.play(1);
-//            play(13 through 21) 
+      mp3_play.playFolder(2, random(8));
       break;
     case 'i': //ignite
       Serial.println("ignite noise");
-            mp3_play.play(1);
-//            play(3)
+      mp3_play.playFolder(6, random(3));
       break;
     case 'e': //extinguish
       Serial.println("extinguish noise");
-            mp3_play.play(1);
-//            play(2)
+      mp3_play.playFolder(7, random(3));
       break;
-     case 'o': //on
-      Serial.println("saber on");
-            mp3_play.play(1);
-//            play()
+    case 'o': //on
+      Serial.println("saber on noise");
+      mp3_play.play(1);
+      break;
+    case 'p': //power off
+      Serial.println("saber off noise");
+      mp3_play.play(2);
       break;
 defualt:
       Serial.println("hum noise");
-      mp3_play.play(1);
+      mp3_play.playFolder(5, random(4));
       break;
   }
 }
 
 void loop() {
-//  if (isBladeOn) {
-//    randomBladePulse();
-    getCompl();
-//    checkButton();
-//    checkStrike();
-//    checkSwing();
-//    checkBattery();
-//    playSound("default");
-//  }
-//  checkButtonActivate();
+  //  if (isBladeOn) {
+  //    randomBladePulse();
+  getCompl();
+  //    checkButton();
+  //    checkStrike();
+      checkSwing();
+  //    checkBattery();
+      playSound("default");
+  //  }
+  //  checkButtonActivate();
 }
 
 void checkButtonActivate() {
-  //check if the button is pressed to turn blade on  
+  //check if the button is pressed to turn blade on
 }
 
 void checkSwing() {
@@ -187,7 +184,7 @@ void checkSwing() {
 void checkButton() {
   //if button is pressed once, set isBladeOn to false
   //playSound("extinguish");
-  //if button is held, change color 
+  //if button is held, change color
 }
 
 void checkStrike() {
