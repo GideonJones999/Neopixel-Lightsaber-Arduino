@@ -1,9 +1,5 @@
-/*
-  Get scaled and calibrated output of MPU6050
-*/
-
+#include <DFPlayerMini_Fast.h>
 #include "MPU6050.h"
-#include "DFRobotDFPlayerMini.h"
 #include "SoftwareSerial.h"
 #include <Adafruit_NeoPixel.h>
 #include "Arduino.h"
@@ -15,6 +11,9 @@ long ACC, GYR, COMPL;
 boolean SWING_ALLOW = true;
 unsigned long LAST_SWING_TIME, SWING_TIMER;
 boolean idle = false, swinging = false, crashing = false;
+int randHum;
+int currentColor = 1;
+uint32_t bladeColor;
 
 #define NUM_LEDS 131        // number of microcircuits WS2811 on LED strip (note: one WS2811 controls 3 LEDs!)
 #define BTN_TIMEOUT 800     // button hold delay, ms
@@ -36,14 +35,15 @@ boolean idle = false, swinging = false, crashing = false;
 #define bladePin 6          // Where to connect the blades on the arduino
 #define buttonPin 2         // where to connect the button on the arduino
 #define voltagePin A6
+#define N_LEDS 131
 
 bool isBladeOn = true;
 
 // Create instance
 MPU6050 accelgyro;
-DFRobotDFPlayerMini mp3_play;
+DFPlayerMini_Fast mp3_play;
 SoftwareSerial mySoftwareSerial(10, 11); // RX, TX
-//Adafruit_NeoPixel strip = Adafruit_NeoPixel(N_LEDS, PIN, NEO_GRB + NEO_KHZ800);
+Adafruit_NeoPixel strip = Adafruit_NeoPixel(N_LEDS, bladePin, NEO_GRB + NEO_KHZ800);
 
 const uint8_t PROGMEM gamma8[] = {
   0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
@@ -64,16 +64,6 @@ const uint8_t PROGMEM gamma8[] = {
   215, 218, 220, 223, 225, 228, 231, 233, 236, 239, 241, 244, 247, 249, 252, 255
 };
 
-#define Teal strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]))
-#define Blue strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Green strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Red strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Orange strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Purple strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Yellow strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Magenta strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define Indigo strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
-#define White strip.Color(pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]),pgm_read_byte(&gamma8[]));
 
 void setup() {
   // Start console
@@ -81,18 +71,39 @@ void setup() {
   gyroSetup();
   mp3Setup();
   //  neopixelSetup();
-  playSound("ignite");
+  delay(500);
+  playSound("onsaber");
+  delay(3000);
+  randHum = random(1, 7);
+}
+
+void neopixelSetup() {
+strip.begin();
+#define Teal strip.Color(pgm_read_byte(&gamma8[65]),pgm_read_byte(&gamma8[181]),pgm_read_byte(&gamma8[175]))
+#define Blue strip.Color(pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[255]))
+#define Green strip.Color(pgm_read_byte(&gamma8[6]),pgm_read_byte(&gamma8[150]),pgm_read_byte(&gamma8[6]))
+#define Red strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[0]))
+#define Orange strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[128]),pgm_read_byte(&gamma8[0]))
+#define Purple strip.Color(pgm_read_byte(&gamma8[75]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[130]))
+#define Yellow strip.Color(pgm_read_byte(&gamma8[254]),pgm_read_byte(&gamma8[221]),pgm_read_byte(&gamma8[0]))
+#define Magenta strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[50]),pgm_read_byte(&gamma8[255]))
+#define Indigo strip.Color(pgm_read_byte(&gamma8[38]),pgm_read_byte(&gamma8[37]),pgm_read_byte(&gamma8[230]))
+#define White strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[255]))  
+bladeColor = Teal;
 }
 
 void gyroSetup() {
   // Initial calibration of gyro
+  Serial.println("MPU6050 Gyro");
   accelgyro.initialize();
   accelgyro.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
   accelgyro.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  Serial.println("MPU6050 Gyro Initialized");
+
 }
 
 void mp3Setup() {
-  Serial.println(F("DFRobot DFPlayer Mini Demo"));
+  Serial.println(F("DFRobot DFPlayer Mini Setup"));
   mySoftwareSerial.begin(9600);
   Serial.println(F("Initializing DFPlayer ... (May take 3~5 seconds)"));
 
@@ -108,30 +119,44 @@ void mp3Setup() {
 }
 
 void playSound(String soundType) {
+  int randSound = 0;
   switch (soundType[0]) {
     case 'f': //fast swing
-      Serial.println("fast swing noise");
-      mp3_play.playFolder(4, random(8));
+      randSound = random(1, 12);
+      Serial.print("fast swing noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(4, randSound);
+      //      delay()
       break;
-    case 'l': //low swing
-      Serial.println("slow swing noise");
-      mp3_play.playFolder(3, random(7));
+    case 'l': //sLow swing
+      randSound = random(1, 11);
+      Serial.print("slow swing noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(3, randSound);
       break;
     case 's': //strong hit
-      Serial.println("strong hit noise");
-      mp3_play.playFolder(1, random(8));
+      randSound = random(1, 9);
+      Serial.print("strong hit noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(1, randSound);
       break;
     case 'w': //weak hit
-      Serial.println("weak hit noise");
-      mp3_play.playFolder(2, random(8));
+      randSound = random(1, 8);
+      Serial.print("weak hit noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(2, randSound);
       break;
     case 'i': //ignite
-      Serial.println("ignite noise");
-      mp3_play.playFolder(6, random(3));
+      randSound = random(1, 6);
+      Serial.print("ignite noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(6, randSound);
       break;
     case 'e': //extinguish
-      Serial.println("extinguish noise");
-      mp3_play.playFolder(7, random(3));
+      randSound = random(1, 6);
+      Serial.print("extinguish noise  ");
+      Serial.println(randSound);
+      mp3_play.playFolder(7, randSound);
       break;
     case 'o': //on
       Serial.println("saber on noise");
@@ -139,11 +164,17 @@ void playSound(String soundType) {
       break;
     case 'p': //power off
       Serial.println("saber off noise");
-      mp3_play.play(2);
+      mp3_play.play(3);
+      break;
+    case 'h': //hum
+      Serial.print("hum noise  ");
+      Serial.println(randHum);
+      mp3_play.playFolder(5, randHum);
       break;
 defualt:
-      Serial.println("hum noise");
-      mp3_play.playFolder(5, random(4));
+      Serial.print("hum noise  ");
+      Serial.println(randHum);
+      mp3_play.playFolder(5, randHum);
       break;
   }
 }
@@ -151,15 +182,94 @@ defualt:
 void loop() {
   //  if (isBladeOn) {
   //    randomBladePulse();
-  getCompl();
+      getCompl();
   //    checkButton();
   //    checkStrike();
-      checkSwing();
+        checkSwing();
   //    checkBattery();
-      playSound("default");
+  //      playSound("default");
   //  }
   //  checkButtonActivate();
+  //  testAudio();
+  //  playSound("poweroff");
+  //  delay(1000);
+  swinging=false;
 }
+
+void testAudio() {
+  playSound("on");
+  delay(3000);
+  playSound("ignite");
+  delay(1000);
+  playSound("hum");
+  delay(1000);
+  playSound("fast swing");
+  delay(1000);
+  playSound("hum");
+  delay(1000);
+  playSound("lslow swing");
+  delay(1000);
+  playSound("hum");
+  delay(1000);
+  playSound("weak hit");
+  delay(1000);
+  playSound("hum");
+  delay(1000);
+  playSound("strong hit");
+  delay(1000);
+  playSound("hum");
+  delay(1000);
+  playSound("extinguish");
+  delay(1000);
+  randHum = random(1, 7);
+  playSound("poweroff");
+  delay(3000);
+}
+
+void testBlade() {}
+
+void changeColor() {
+  currentColor++;
+  if (currentColor == 11) {
+    currentColor = 1;
+  }
+  switch (currentColor) {
+    case 1:
+      bladeColor = Teal;
+      break;
+    case 2:
+      bladeColor = Blue;
+      break;
+    case 3:
+      bladeColor = Green;
+      break;
+    case 4:
+      bladeColor = Red;
+      break;
+    case 5:
+      bladeColor = Orange;
+      break;
+    case 6:
+      bladeColor = Purple;
+      break;
+    case 7:
+      bladeColor = Yellow;
+      break;
+    case 8:
+      bladeColor = Magenta;
+      break;
+    case 9:
+      bladeColor = Indigo;
+      break;
+    case 10:
+      bladeColor = White;
+      break;
+    default:
+      bladeColor = Teal;
+      break;
+  }
+}
+
 
 void checkButtonActivate() {
   //check if the button is pressed to turn blade on
@@ -172,11 +282,13 @@ void checkSwing() {
     idle = false;
     swinging = true;
     if (GYR >= SWING_THR) {
-      Serial.println("HIGH");
-      playSound("highswing");
+      Serial.println("FAST");
+      playSound("fast swing");
+      delay(500);
     } else {
-      Serial.println("LOW");
-      playSound("lowswing");
+      Serial.println("SLOW");
+      playSound("lslow swing");
+      delay(500);
     }
   }
 }
