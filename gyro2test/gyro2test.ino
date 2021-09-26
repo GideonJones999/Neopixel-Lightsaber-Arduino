@@ -1,3 +1,4 @@
+#include <EEPROM.h>
 #include <DFPlayerMini_Fast.h>
 #include "MPU6050.h"
 #include "SoftwareSerial.h"
@@ -14,6 +15,7 @@ boolean idle = false, swinging = false, crashing = false;
 int randHum;
 int currentColor = 1;
 uint32_t bladeColor;
+int bladeRed = 65, bladeBlue = 181, bladeGreen = 175;
 
 #define NUM_LEDS 131        // number of microcircuits WS2811 on LED strip (note: one WS2811 controls 3 LEDs!)
 #define BTN_TIMEOUT 800     // button hold delay, ms
@@ -24,8 +26,8 @@ uint32_t bladeColor;
 #define SWING_L_THR 150     // swing angle speed threshold
 #define SWING_THR 300       // fast swing angle speed threshold
 
-#define STRIKE_THR 150      // hit acceleration threshold
-#define STRIKE_S_THR 320    // hard hit acceleration threshold
+#define STRIKE_THR 27      // hit acceleration threshold
+#define STRIKE_S_THR 40    // hard hit acceleration threshold
 
 #define FLASH_DELAY 80      // flash time while hit
 #define PULSE_ALLOW 1       // blade pulsation (1 - allow, 0 - disallow)
@@ -66,30 +68,32 @@ const uint8_t PROGMEM gamma8[] = {
 
 
 void setup() {
+
   // Start console
   Serial.begin(115200);
   gyroSetup();
   mp3Setup();
+  if ((EEPROM.read(0) >= 1) && (EEPROM.read(0) <= 11)) {
+    currentColor = EEPROM.read(0);
+  } else {
+    EEPROM.write(0, 1);
+    currentColor = 1;
+  }
   //  neopixelSetup();
+  Serial.print("Blade Color: ");
+  Serial.println(EEPROM.read(0));
   delay(500);
   playSound("onsaber");
   delay(3000);
-  randHum = random(1, 7);
+  randHum = random(1, 36);
+  changeColor(currentColor + 1);
 }
 
 void neopixelSetup() {
-strip.begin();
-#define Teal strip.Color(pgm_read_byte(&gamma8[65]),pgm_read_byte(&gamma8[181]),pgm_read_byte(&gamma8[175]))
-#define Blue strip.Color(pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[255]))
-#define Green strip.Color(pgm_read_byte(&gamma8[6]),pgm_read_byte(&gamma8[150]),pgm_read_byte(&gamma8[6]))
-#define Red strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[0]))
-#define Orange strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[128]),pgm_read_byte(&gamma8[0]))
-#define Purple strip.Color(pgm_read_byte(&gamma8[75]),pgm_read_byte(&gamma8[0]),pgm_read_byte(&gamma8[130]))
-#define Yellow strip.Color(pgm_read_byte(&gamma8[254]),pgm_read_byte(&gamma8[221]),pgm_read_byte(&gamma8[0]))
-#define Magenta strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[50]),pgm_read_byte(&gamma8[255]))
-#define Indigo strip.Color(pgm_read_byte(&gamma8[38]),pgm_read_byte(&gamma8[37]),pgm_read_byte(&gamma8[230]))
-#define White strip.Color(pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[255]),pgm_read_byte(&gamma8[255]))  
-bladeColor = Teal;
+  strip.begin();
+  bladeColor = strip.Color(pgm_read_byte(&gamma8[bladeRed]), pgm_read_byte(&gamma8[bladeGreen]), pgm_read_byte(&gamma8[bladeBlue]));
+
+
 }
 
 void gyroSetup() {
@@ -147,13 +151,13 @@ void playSound(String soundType) {
       mp3_play.playFolder(2, randSound);
       break;
     case 'i': //ignite
-      randSound = random(1, 6);
+      randSound = random(1, 85);
       Serial.print("ignite noise  ");
       Serial.println(randSound);
       mp3_play.playFolder(6, randSound);
       break;
     case 'e': //extinguish
-      randSound = random(1, 6);
+      randSound = random(1, 19);
       Serial.print("extinguish noise  ");
       Serial.println(randSound);
       mp3_play.playFolder(7, randSound);
@@ -182,10 +186,10 @@ defualt:
 void loop() {
   //  if (isBladeOn) {
   //    randomBladePulse();
-      getCompl();
+  getCompl();
   //    checkButton();
-  //    checkStrike();
-        checkSwing();
+  checkStrike();
+  checkSwing();
   //    checkBattery();
   //      playSound("default");
   //  }
@@ -193,8 +197,18 @@ void loop() {
   //  testAudio();
   //  playSound("poweroff");
   //  delay(1000);
-  swinging=false;
+  swinging = false;
+  crashing = false;
+  idle = true;
+  if (mp3_play.isPlaying() == false) mp3_play.playFolder(5, randHum);
+
 }
+//
+//void loopHum() {
+//  Serial.print("hum noise  ");
+//      Serial.println(randHum);
+//      mp3_play.loop(mp3_play.playFolder(5, randHum));
+//}
 
 void testAudio() {
   playSound("on");
@@ -228,46 +242,72 @@ void testAudio() {
 
 void testBlade() {}
 
-void changeColor() {
-  currentColor++;
-  if (currentColor == 11) {
+void changeColor(int NewColorNumber) {
+  if (NewColorNumber == 11 || NewColorNumber == 0) {
     currentColor = 1;
+  } else {
+    currentColor = NewColorNumber;
   }
   switch (currentColor) {
-    case 1:
-      bladeColor = Teal;
+    case 1: //TEAL
+      bladeRed = 65;
+      bladeGreen = 181;
+      bladeBlue = 175;
       break;
-    case 2:
-      bladeColor = Blue;
+    case 2: //BLUE
+      bladeRed = 0;
+      bladeGreen = 0;
+      bladeBlue = 255;
       break;
-    case 3:
-      bladeColor = Green;
+    case 3: //GREEN
+      bladeRed = 6;
+      bladeGreen = 150;
+      bladeBlue = 6;
       break;
-    case 4:
-      bladeColor = Red;
+    case 4: //RED
+      bladeRed = 255;
+      bladeGreen = 0;
+      bladeBlue = 0;
       break;
-    case 5:
-      bladeColor = Orange;
+    case 5: //ORANGE
+      bladeRed = 255;
+      bladeGreen = 128;
+      bladeBlue = 0;
       break;
-    case 6:
-      bladeColor = Purple;
+    case 6: //PURPLE
+      bladeRed = 75;
+      bladeGreen = 0;
+      bladeBlue = 130;
       break;
-    case 7:
-      bladeColor = Yellow;
+    case 7: //YELLOW/GOLD
+      bladeRed = 254;
+      bladeGreen = 221;
+      bladeBlue = 0;
       break;
-    case 8:
-      bladeColor = Magenta;
+    case 8: //MAGENTA
+      bladeRed = 255;
+      bladeGreen = 50;
+      bladeBlue = 255;
       break;
-    case 9:
-      bladeColor = Indigo;
+    case 9: //INDIGO
+      bladeRed = 38;
+      bladeGreen = 37;
+      bladeBlue = 230;
       break;
-    case 10:
-      bladeColor = White;
+    case 10: //WHITE
+      bladeRed = 255;
+      bladeGreen = 255;
+      bladeBlue = 255;
       break;
-    default:
-      bladeColor = Teal;
+    default: //TEAL
+      bladeRed = 65;
+      bladeGreen = 181;
+      bladeBlue = 175;
       break;
   }
+  EEPROM.write(0, currentColor);
+  Serial.print("Blade Color changed: ");
+  Serial.println(currentColor);
 }
 
 
@@ -276,11 +316,11 @@ void checkButtonActivate() {
 }
 
 void checkSwing() {
-  if (GYR > SWING_L_THR && (millis() - LAST_SWING_TIME > 500) && !swinging) {
+  if (GYR > SWING_L_THR && (millis() - LAST_SWING_TIME > 500) && !swinging && !crashing) {
     LAST_SWING_TIME = millis();
     Serial.print("SWING  ");
-    idle = false;
     swinging = true;
+    idle=false;
     if (GYR >= SWING_THR) {
       Serial.println("FAST");
       playSound("fast swing");
@@ -295,12 +335,33 @@ void checkSwing() {
 
 void checkButton() {
   //if button is pressed once, set isBladeOn to false
-  //playSound("extinguish");
+  //  playSound("extinguish");
   //if button is held, change color
+  //  changeColor(currentColor+1);
 }
 
 void checkStrike() {
+  if (ACC > STRIKE_THR && !crashing) {
+    swinging=false;
+    crashing=true;
+    idle=false;
+    Serial.print("STRIKE  ");
+    hit_flash();
+    if (ACC >= STRIKE_S_THR) {
+      Serial.println("STRONG");
+      playSound("strong hit");
+    } else {
+      Serial.println("WEAK");
+      playSound("weak hit");
+    }
+  }
+}
 
+void hit_flash() {
+  Serial.println("FLASH!");
+//  setAll(255, 255, 255);
+  delay(FLASH_DELAY);
+//  setAll(red, blue, green);
 }
 
 void checkBattery() {
