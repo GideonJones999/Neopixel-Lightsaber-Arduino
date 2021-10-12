@@ -22,6 +22,7 @@ long ACC, GYR, COMPL;
 
 #define STRIKE_THR 150      // hit acceleration threshold
 #define STRIKE_S_THR 320    // hard hit acceleration threshold
+int PULSE_DELAY = 27000;   // Time between pulses
 
 unsigned long btn_timer, PULSE_timer, LAST_SWING_TIME, SWING_TIMER, battery_timer, bzzTimer;
 int bladeIgnitionTime = 250;
@@ -33,6 +34,7 @@ String currentColorText;
 uint32_t bladeColor;
 bool isBladeActivated = false;
 bool isBladeIn = false;
+float PULSEOffset = 50;
 SoftwareSerial mySoftwareSerial(10, 11); // RX, TX
 DFPlayerMini_Fast mp3_play;
 Adafruit_NeoPixel strip(N_LEDS, PIN, NEO_GRB + NEO_KHZ800);
@@ -131,13 +133,13 @@ void loop() {
     }
     else {
       strip.fill(bladeColor);
-//      Serial.println("ln 134");
+      //      Serial.println("ln 134");
       strip.show();
     }
   } else { //not isBladeActivated
-    if(!activating) {
+    if (!activating) {
       strip.fill(0, 0, 0);
-      }
+    }
     strip.show();
   }
 }
@@ -199,7 +201,7 @@ void playSound(String soundType) {
       Serial.println("Color Change Sound");
       mp3_play.play(4);
       break;
-default:
+    default:
       Serial.print("hum noise  ");
       mp3_play.playFolder(3, randHum);
       Serial.println(randHum);
@@ -233,7 +235,7 @@ static void checkButton() {
     else {
       changeHiltLight(bladeColor);
     }
-        activating = false;
+    activating = false;
   }
   else if (btnState && !btn_flag) {
     checkBladeThere();
@@ -267,6 +269,28 @@ static void checkButton() {
   else if (!btnState && btn_flag) {
     btn_flag = 0;
     hold_flag = 0;
+  }
+}
+
+void randomPULSE() {
+  if (millis() - PULSE_timer > PULSE_DELAY) {
+    PULSE_timer = millis();
+    int offset = random(0, (PULSEOffset + 1));
+    int redOffset = bladeRed + offset;
+    int greenOffset = bladeGreen + offset;
+    int blueOffset = bladeBlue + offset;
+    uint32_t pulseColor = strip.Color(pgm_read_byte(&gamma8[redOffset]), pgm_read_byte(&gamma8[greenOffset]), pgm_read_byte(&gamma8[blueOffset]));
+    for (uint16_t i = 0; i < strip.numPixels(); i++) {
+      strip.setPixelColor(i  , pulseColor); // Draw new pixel
+      strip.show();
+      delay(lightDelay);
+    }
+    delay(400);
+    for (uint16_t i = 0; i < strip.numPixels(); i++) {
+      strip.setPixelColor(i, bladeColor); // Draw new pixel
+      strip.show();
+      delay(lightDelay);
+    }
   }
 }
 
@@ -317,7 +341,7 @@ static void igniteNova(uint32_t c) {
   Serial.println("Ignition N");
   playSound("ignite");
   for (uint16_t i = 0; i < strip.numPixels(); i++) {
-    if (i+1 != strip.numPixels()) {
+    if (i + 1 != strip.numPixels()) {
       strip.setPixelColor(i + 1, strip.Color(255, 255, 255));
     }
     strip.setPixelColor(i  , c); // Draw new pixel
