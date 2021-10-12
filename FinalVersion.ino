@@ -12,12 +12,20 @@ long ACC, GYR, COMPL;
 #define FLASH_DELAY 80      // flash time while hit
 
 #define PIN    6
-#define N_LEDS 10
-#define bladeCheckPin 8
+#define N_LEDS 131
+#define bladeCheckPin 9
 #define buttonPin 4
 #define BTN_TIMEOUT 800     // button hold delay, ms
-int bladeIgnitionTime = 100;
-boolean btnState, btn_flag, hold_flag;
+
+#define SWING_L_THR 150     // swing angle speed threshold
+#define SWING_THR 300       // fast swing angle speed threshold
+
+#define STRIKE_THR 150      // hit acceleration threshold
+#define STRIKE_S_THR 320    // hard hit acceleration threshold
+
+unsigned long btn_timer, PULSE_timer, LAST_SWING_TIME, SWING_TIMER, battery_timer, bzzTimer;
+int bladeIgnitionTime = 250;
+boolean idle = false, swinging = false, crashing = false, activating = false, btnState, btn_flag, hold_flag;
 int lightDelay = bladeIgnitionTime / N_LEDS;
 int currentColor = 1;
 int bladeRed, bladeGreen, bladeBlue;
@@ -25,11 +33,11 @@ String currentColorText;
 uint32_t bladeColor;
 bool isBladeActivated = false;
 bool isBladeIn = false;
-unsigned long btn_timer;
 SoftwareSerial mySoftwareSerial(10, 11); // RX, TX
 DFPlayerMini_Fast mp3_play;
 Adafruit_NeoPixel strip(N_LEDS, PIN, NEO_GRB + NEO_KHZ800);
 MPU6050 accelgyro;
+int randHum, randNoise;
 
 
 const uint8_t PROGMEM gamma8[] = {
@@ -58,6 +66,7 @@ void setup() {
   pinMode(buttonPin, INPUT_PULLUP);
   neoPixelSetup();
   mp3Setup();
+  gyroSetup();
   Serial.println("Startup completed");
   playSound("on");
 }
@@ -76,6 +85,7 @@ void mp3Setup() {
   Serial.println(F("DFPlayer Mini online."));
 
   mp3_play.volume(30);  //Set volume value. From 0 to 30
+  randomSeed(analogRead(0));
 }
 
 void neoPixelSetup() {
@@ -90,58 +100,83 @@ void neoPixelSetup() {
   strip.clear();
   changeColor(currentColor);
   bladeColor = strip.Color(pgm_read_byte(&gamma8[bladeRed]), pgm_read_byte(&gamma8[bladeGreen]), pgm_read_byte(&gamma8[bladeBlue]));
-  //  checkBattery();
+  //    checkBattery();
 }
 
-void loop() {
-  if (isBladeActivated) {
-    checkButton();
-    if (isBladeIn) {
-      getCompl();
-//      checkStrike();
-//      checkSwing();
-      //check other things, like clash, swing, etc.
-//      if (mp3_play.isPlaying() == false) {
-//        playSound("hum");
-//      }
+void gyroSetup() {
+  // Initial calibration of gyro
+  Serial.println("MPU6050 Gyro");
+  accelgyro.initialize();
+  accelgyro.setFullScaleAccelRange(MPU6050_ACCEL_FS_16);
+  accelgyro.setFullScaleGyroRange(MPU6050_GYRO_FS_250);
+  Serial.println("MPU6050 Gyro Initialized");
+}
 
+
+void loop() {
+  checkButton();
+  if (isBladeActivated || activating) {
+    if (isBladeIn) {
+      if (mp3_play.isPlaying() == false) {
+        playSound("hum");
+      }
+      checkButton();
+      getCompl();
+      checkButton();
+      checkStrike();
+      checkSwing();
+      checkButton();
+      swinging = false;
+      crashing = false;
     }
     else {
       strip.fill(bladeColor);
+//      Serial.println("ln 134");
       strip.show();
     }
-  } else {
-    checkButton();
-    strip.fill(0, 0, 0);
+  } else { //not isBladeActivated
+    if(!activating) {
+      strip.fill(0, 0, 0);
+      }
     strip.show();
   }
 }
 
 void playSound(String soundType) {
+  randNoise = random(1, 9); //picking random number from 1 to 8
   switch (soundType[0]) {
     case 'f': //fast swing
       Serial.print("fast swing noise  ");
-      mp3_play.playFolder(5, 1);
+      mp3_play.playFolder(5, randNoise);
+      Serial.println(randNoise);
       break;
     case 'l': //sLow swing
       Serial.print("slow swing noise  ");
-      mp3_play.playFolder(4, 1);
+      mp3_play.playFolder(4, randNoise);
+      Serial.println(randNoise);
       break;
     case 's': //strong hit
       Serial.print("strong hit noise  ");
-      mp3_play.playFolder(7, 1);
+      mp3_play.playFolder(7, randNoise);
+      Serial.println(randNoise);
       break;
     case 'w': //weak hit
       Serial.print("weak hit noise  ");
-      mp3_play.playFolder(6, 1);
+      mp3_play.playFolder(6, randNoise);
+      Serial.println(randNoise);
       break;
     case 'i': //ignite
+      randNoise = random(1, 3);
       Serial.print("ignite noise  ");
-      mp3_play.playFolder(1, 1);
+      mp3_play.playFolder(1, randNoise);
+      Serial.println(randNoise);
+      randHum = randNoise;
       break;
     case 'e': //extinguish
+      randNoise = random(1, 3);
       Serial.print("extinguish noise  ");
-      mp3_play.playFolder(2, 1);
+      mp3_play.playFolder(2, randNoise);
+      Serial.println(randNoise);
       break;
     case 'o': //on
       Serial.println("saber on noise");
@@ -153,7 +188,8 @@ void playSound(String soundType) {
       break;
     case 'h': //hum
       Serial.println("hum noise  ");
-      mp3_play.playFolder(3, 1);
+      mp3_play.playFolder(3, randHum);
+      Serial.println(randHum);
       break;
     case 'm': //misfire
       Serial.println("Saber misfire");
@@ -163,9 +199,10 @@ void playSound(String soundType) {
       Serial.println("Color Change Sound");
       mp3_play.play(4);
       break;
-defualt:
+default:
       Serial.print("hum noise  ");
-      mp3_play.playFolder(3, 1);
+      mp3_play.playFolder(3, randHum);
+      Serial.println(randHum);
       break;
   }
 }
@@ -187,13 +224,16 @@ static void checkButton() {
     }
     delay(500);
     changeColorAudio(currentColor + 1);
-
+    activating = true;
+    Serial.println("221 activating");
+    isBladeActivated = true;
     if (isBladeIn) {
       igniteNova(bladeColor);
     }
     else {
       changeHiltLight(bladeColor);
     }
+        activating = false;
   }
   else if (btnState && !btn_flag) {
     checkBladeThere();
@@ -207,9 +247,13 @@ static void checkButton() {
       else {
         changeHiltLight(strip.Color(0, 0, 0));
       }
+      Serial.println("244 blade is activating false");
       isBladeActivated = false;
     }
     else {
+      activating = true;
+      Serial.println("249 blade is activating true");
+      isBladeActivated = true;
       if (isBladeIn) {
         igniteNova(bladeColor);
       }
@@ -218,14 +262,12 @@ static void checkButton() {
       }
       isBladeActivated = true;
     }
-    checkBladeThere();
-
+    activating = false;
   }
   else if (!btnState && btn_flag) {
     btn_flag = 0;
     hold_flag = 0;
   }
-
 }
 
 static void changeColorAudio (int newColorNumb) {
@@ -246,29 +288,19 @@ static void changeHiltLight(uint32_t c) {
     Serial.println("off");
   }
   strip.fill(c);
+  Serial.println("ln 276");
   strip.show();
 }
 
 
 static void checkBladeThere() {
-  isBladeIn = digitalRead(bladeCheckPin);
+  isBladeIn = !digitalRead(bladeCheckPin);
   if (isBladeIn == 1) {
     Serial.println("Blade is in");
   } else {
     Serial.println("Blade is out");
   }
 }
-
-//static void chase(uint32_t c) {
-//  Serial.print("Chase: ");
-//  Serial.println(c);
-//  for (int i = 0; i < strip.numPixels(); i++) {
-//    strip.setPixelColor(i, c); // Draw new pixel
-//    strip.setPixelColor(i - 2, 0); // Erase pixel a few steps back
-//    strip.show();
-//    delay(lightDelay);
-//  }
-//}
 
 static void ignite(uint32_t c) {
   Serial.println("Ignition");
@@ -278,19 +310,21 @@ static void ignite(uint32_t c) {
     strip.show();
     delay(lightDelay);
   }
+  randHum = random(1, 3); //Get Random Value of 1 or 2
 }
 
 static void igniteNova(uint32_t c) {
   Serial.println("Ignition N");
   playSound("ignite");
   for (uint16_t i = 0; i < strip.numPixels(); i++) {
-    if (i != strip.numPixels()) {
+    if (i+1 != strip.numPixels()) {
       strip.setPixelColor(i + 1, strip.Color(255, 255, 255));
     }
     strip.setPixelColor(i  , c); // Draw new pixel
     strip.show();
     delay(lightDelay);
   }
+  randHum = random(1, 3); //Get Random Value of 1 or 2
 }
 
 static void igniteUnstable(uint32_t c) {
@@ -304,6 +338,7 @@ static void igniteUnstable(uint32_t c) {
     strip.show();
     delay(lightDelay);
   }
+  randHum = random(1, 3); //Get Random Value of 1 or 2
 }
 
 static void extinguish() {
@@ -432,19 +467,50 @@ void changeColor(int NewColorNumber) {
 }
 
 void checkSwing() {
-
+  if (GYR > SWING_L_THR && (millis() - LAST_SWING_TIME > 500) && !swinging && !crashing) {
+    LAST_SWING_TIME = millis();
+    Serial.print("SWING  ");
+    swinging = true;
+    idle = false;
+    if (GYR >= SWING_THR) {
+      Serial.println("FAST");
+      playSound("fast swing");
+      delay(500);
+    } else {
+      Serial.println("SLOW");
+      playSound("lslow swing");
+      delay(500);
+    }
+  }
 }
 
 void checkStrike() {
-
+  if (ACC > STRIKE_THR && !crashing) {
+    swinging = false;
+    crashing = true;
+    idle = false;
+    Serial.print("STRIKE  ");
+    if (ACC >= STRIKE_S_THR) {
+      Serial.println("STRONG");
+      playSound("strong hit");
+      hit_flash();
+    } else {
+      Serial.println("WEAK");
+      playSound("weak hit");
+      hit_flash();
+    }
+  }
 }
 
 void hit_flash() {
   Serial.println("FLASH!");
   strip.fill(strip.Color(255, 255, 255));
+  Serial.println("ln 439");
   strip.show();
   delay(FLASH_DELAY);
   strip.fill(bladeColor);
+  strip.show();
+  Serial.println("ln 498");
 }
 
 void getCompl() {
@@ -484,4 +550,3 @@ void getCompl() {
   Serial.println(COMPL);
   delay(500);
 }
-
